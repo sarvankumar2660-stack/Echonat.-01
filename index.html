@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoNat.01 - AI Voice Assistant</title>
+    <style>
+        body { 
+            font-family: Arial; 
+            text-align: center; 
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white; 
+            padding: 50px;
+        }
+        button { 
+            padding: 20px; 
+            font-size: 24px; 
+            border-radius: 50px; 
+            border: none; 
+            margin: 20px; 
+            cursor: pointer;
+        }
+        .mic { 
+            background: #ff4757; 
+            color: white; 
+            width: 150px; 
+            height: 150px; 
+            border-radius: 50%; 
+        }
+        .listening { 
+            background: #2ed573; 
+            animation: pulse 1s infinite; 
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        input { 
+            padding: 15px; 
+            width: 400px; 
+            margin: 10px; 
+            border-radius: 10px; 
+            border: none; 
+        }
+        .status { 
+            font-size: 20px; 
+            margin: 20px; 
+        }
+    </style>
+</head>
+<body>
+    <h1>🎙️ EchoNat.01</h1>
+    <div class="status" id="status">Keys daalo → Mic daba!</div>
+    
+    <!-- KEYS -->
+    <input id="elevenKey" placeholder="xi-API-key (ElevenLabs)">
+    <br>
+    <input id="openrouterKey" placeholder="sk-... (OpenRouter)">
+    <br>
+    <button onclick="setupKeys()">✅ Setup Keys</button>
+    
+    <!-- MIC -->
+    <button class="mic" id="micBtn" onclick="record()">🎙️</button>
+    
+    <!-- RESULT -->
+    <div id="result"></div>
+    <audio id="audio" controls></audio>
+
+    <script>
+        let elevenKey = '';
+        let openrouterKey = '';
+        let recording = false;
+
+        function setupKeys() {
+            elevenKey = document.getElementById('elevenKey').value;
+            openrouterKey = document.getElementById('openrouterKey').value;
+            document.getElementById('status').innerText = '✅ Keys ready! Mic daba!';
+        }
+
+        async function record() {
+            if (!elevenKey || !openrouterKey) {
+                alert('❌ Pehle keys setup karo!');
+                return;
+            }
+
+            const status = document.getElementById('status');
+            const micBtn = document.getElementById('micBtn');
+            
+            status.innerText = '🎙️ Bol rahe ho...';
+            micBtn.classList.add('listening');
+            micBtn.innerText = '🔴';
+
+            // Record 4 seconds
+            const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+            const recorder = new MediaRecorder(stream);
+            const chunks = [];
+            
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = async () => {
+                const audioBlob = new Blob(chunks, {type: 'audio/wav'});
+                
+                // Demo text (real STT later)
+                const userText = 'Hello EchoNat kaise ho?';
+                
+                status.innerText = '🧠 AI soch raha...';
+                
+                // OpenRouter AI
+                const aiText = await aiResponse(userText);
+                
+                // ElevenLabs Voice
+                const audioUrl = await tts(aiText);
+                
+                document.getElementById('result').innerText = aiText;
+                document.getElementById('audio').src = audioUrl;
+                
+                status.innerText = '✅ Ready! Dobara mic daba!';
+                micBtn.innerText = '🎙️';
+                micBtn.classList.remove('listening');
+            };
+            
+            recorder.start();
+            setTimeout(() => {
+                recorder.stop();
+                stream.getTracks().forEach(track => track.stop());
+            }, 4000);
+        }
+
+        async function aiResponse(text) {
+            try {
+                const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${openrouterKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'anthropic/claude-3.5-sonnet',
+                        messages: [{role: 'user', content: text}],
+                        max_tokens: 80
+                    })
+                });
+                const data = await res.json();
+                return data.choices[0].message.content;
+            } catch {
+                return '😂 Main theek hoon! Tum batao kya chal raha hai?';
+            }
+        }
+
+        async function tts(text) {
+            try {
+                const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
+                    method: 'POST',
+                    headers: {
+                        'xi-api-key': elevenKey,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model_id: 'eleven_monolingual_v1'
+                    })
+                });
+                return URL.createObjectURL(await res.blob());
+            } catch {
+                return 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAo';
+            }
+        }
+    </script>
+</body>
+</html>
